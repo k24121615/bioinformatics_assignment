@@ -1,0 +1,252 @@
+---
+title: "Advanced Bioinformatics 2026 Assignment"
+author: "K24121615"
+date: "2026-04-04"
+output: html_document
+---
+
+## Task 3.1 
+#Using the ':' operator to generate a sequence from 5 to 55 and 'sum()' to all them all together. 
+```{r}
+sum (5:55)
+```
+
+## Task 3.2
+#Generating a function called 'sumfun' that calculates the sum of all integers between 5 and n. 
+```{r}
+sumfun <- function(n){
+return(sum(5:n))
+}
+sumfun (10)
+sumfun (20)
+sumfun (100)
+```
+
+## Task 3.3
+#Using a for loop to calculate the first 12 Fibonacci numbers. The sequence starts with two 1s and each value is the sum of the 2 preceding values.
+```{r}
+fib <- numeric(12)
+fib[1] <- 1
+fib[2] <- 1
+for (i in 3:12) {
+fib[i] <- fib[i-1] + fib[i-2]
+}
+print(fib)
+```
+
+## Task 3.4
+#Using ggplot2 to plot miles per gallon by nember of gears from the mtcars dataset, gear is converted to a afcttor so ggplot treats it as categorical. 
+```{r}
+library(ggplot2)
+ggplot(mtcars, aes(x = factor(gear), y = mpg, fill = factor(gear))) + geom_boxplot() + 
+labs(
+title = "Miles per gallon by Number of gears", 
+x = "Number of gears", 
+y = "Miles per gallon (mpg)",
+fill = "Gears"
+) +
+theme_bw()
+```
+
+## Task 3.5
+#Fitting a linear model to examine the relationship between speed and stopping distance in the cars dataset. summary() extracts the coefficients and their standard error.
+```{r}
+model <- lm(dist ~ speed, data = cars)
+summary(model)
+```
+
+## Task 3.6
+# Plotting the cars data points and the linear regression line from Task 3.5. geom_smooth(method = "lm") fits and draws the line with a confidence interval.
+```{r}
+ggplot(cars, aes(x = speed, y = dist)) +
+geom_point(colour = "steelblue", size = 2) +
+geom_smooth(method = "lm", se = TRUE, colour = "red") +
+labs(
+title = "Speed vs Stopping distance with Linear fit", 
+x = "Speed (mph)", 
+y = "Stopping distance (ft)"
+) +
+theme_bw()
+```
+
+## Task 3.7
+# Modelling stopping distance as reaction distance plus braking distance. A linear model with no intercept is fitted using speed and speed-squared as predictors to estimate driver reaction time. 
+# Create speed-squared variable
+```{r}
+cars$speed2 <- cars$speed^2
+```
+
+# Fit model with no intercept
+```{r}
+model_reaction <- lm(dist ~ 0 + speed + speed2, data = cars)
+summary(model_reaction)
+```
+
+# Convert coefficient to seconds
+# 1 mph = 5280/3600 feet per second
+# reaction_time (seconds) = coefficient of speed / 1.467
+```{r}
+t_r <- coef(model_reaction)["speed"] / (5280/3600)
+cat("Estimated reaction time:", round(t_r, 3), "seconds\n")
+```
+
+# Plot the results
+```{r}
+cars$fitted_reaction <- fitted(model_reaction)
+ggplot(cars, aes(x = speed)) +
+geom_point(aes(y = dist), colour = "steelblue", size = 2) + 
+geom_line(aes(y = fitted_reaction), colour = "red", linewidth = 1) +
+labs(
+title = "Speed vs Distance: Quadratic reaction time model", 
+subtitle = paste("Estimated reaction time:", round(t_r, 3), "seconds"), 
+x = "Speed (mph)", 
+y = "Stopping distance (ft)"
+) +
+theme_bw()
+```
+
+## Task 3.8
+# Reading in the count matrix and sample metadata files from the tutorial data.
+```{r}
+library(DESeq2)
+count_data <- read.csv(
+"C:/Users/simar/Downloads/LMS_RNAseq_short-master-2023-final/LMS_RNAseq_short-master-2023-final/course/exercises/data/exercise1_counts.csv", 
+row.names = 1
+) 
+sample_desc <- read.table(
+"C:/Users/simar/Downloads/LMS_RNAseq_short-master-2023-final/LMS_RNAseq_short-master-2023-final/course/exercises/data/exercise1_sample_description.info", 
+header = TRUE, 
+sep = "\t"
+)
+head(count_data)
+head(sample_desc)
+```
+
+## Task 3.9
+# Creating col_data, a data frame of sample metadata required by DESeq2. Row names must match column names of count_data exactly. 
+```{r}
+col_data <- data.frame(
+condition = sample_desc$condition,
+row.names = colnames(count_data)
+)
+dim(count_data)
+dim(col_data)
+all(colnames(count_data) == rownames(col_data))
+```
+
+## Task 3.10
+# Constructing the DESeqDataSet object. The design formula ~ condition tells DESeq2 to model expression differences between conditions. Low-count genes are pre-filtered to improve statistical power.
+```{r}
+dds <- DESeqDataSetFromMatrix(
+countData = count_data, 
+colData = col_data, 
+design = ~ condition
+)
+```
+
+# Remove genes with fewer than 10 total reads. 
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep, ]
+dds
+```
+
+## Task 3.11
+# Applying rlog and VST transformations to stabilise variance across genes. Both produce approximately normally distributed data suitable for visualisation. blind = TRUE means the design is ignored, appropriate for QC. 
+```{r}
+rlog_data <- rlog(dds, blind = TRUE)
+vst_data <- vst(dds, blind = TRUE)
+class(rlog_data)
+class(vst_data)
+```
+
+## Task 3.12 
+# Drawing heatmaps of the top 40 most highly expressed genes using both transformations. scale = "row" standardises each gene so colour reflects relative change rather than absolute expression. 
+```{r}
+library(pheatmap)
+```
+# rlog heatmap
+```{r}
+rlog_mat <- assay(rlog_data)
+top40_idx<- head(order(rowMeans(rlog_mat), decreasing = TRUE), 40)
+pheatmap(
+rlog_mat[top40_idx, ],
+cluster_rows = TRUE,
+cluster_cols = TRUE,
+show_rownames = TRUE,
+annotation_col = as.data.frame(colData(rlog_data)), 
+scale = "row",
+main = "Top 40 genes - rlog transformation"
+)
+```
+# VST heatmap 
+```{r}
+vst_mat <- assay(vst_data)
+top40_vst <- head(order(rowMeans(vst_mat), decreasing = TRUE), 40)
+pheatmap(
+vst_mat[top40_vst, ],
+cluster_rows = TRUE,
+cluster_cols = TRUE,
+show_rownames = TRUE,
+annotation_col = as.data.frame(colData(vst_data)), 
+scale = "row",
+main = "Top 40 genes - VST transformation"
+)
+```
+
+## Task 3.13
+# Generating a sample distance matrix to assess overall similarity between samples. Euclidean distances are calculated between all pairs of samples. Samples from the same conditions should cluster togther. 
+```{r}
+library(RColorBrewer)
+sample_dists <- dist(t(assay(rlog_data)))
+sdm <- as.matrix(sample_dists)
+rownames(sdm) <- colnames(rlog_data)
+colnames(sdm) <- colnames(rlog_data)
+colours <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+pheatmap(
+sdm,
+clustering_distance_rows = sample_dists,
+clustering_distance_cols = sample_dists,
+col  = colours,
+main = "Sample Distance Matrix"
+)
+```
+
+## Task 3.14
+# Performing PCA on rlog-transformed data using the top 500 most variabe genes. PC1 and PC2 are plotted with the percentage of variance they explain shown on the axis.
+```{r}
+pca_rlog <- plotPCA(rlog_data, intgroup = "condition", returnData = TRUE)
+percentVar_rlog <- round(100 * attr(pca_rlog, "percentVar"))
+cat("PC1 explains:", percentVar_rlog[1], "% of variance\n")
+cat("PC2 explains:", percentVar_rlog[2], "% of variance\n")
+ggplot(pca_rlog, aes(x = PC1, y = PC2, colour = condition)) +
+geom_point(size = 3) +
+labs(
+title = "PCA - rlog Transformation",
+x = paste0("PC1: ", percentVar_rlog[1], "% variance"),
+y = paste0("PC2: ", percentVar_rlog[2], "% variance")
+) +
+theme_bw()
+```
+
+## Task 3.15 
+# Repeating PCA using VST-transformed data and comparing with the rlog PCA. Both should show similar clustering. rlog is more robust for small datasets while VST is faster for larger ones. 
+```{r}
+pca_vst <- plotPCA(vst_data, intgroup = "condition", returnData = TRUE)
+percentVar_vst <- round(100 * attr(pca_vst, "percentVar"))
+cat("VST - PC1 explains:", percentVar_vst[1], "% of variance\n")
+cat("VST - PC2 explains:", percentVar_vst[2], "% of variance\n")
+ggplot(pca_vst, aes(x = PC1, y = PC2, colour = condition)) +
+geom_point(size = 3) +
+labs(
+title = "PCA - VST Transformation",
+x = paste0("PC1: ", percentVar_vst[1], "% variance"),
+y = paste0("PC2: ", percentVar_vst[2], "% variance")
+) +
+theme_bw()
+```
+
+## Comparison of rlog and VST PCA: -
+In the rlog PCA, PC1 accounted for 70% of the variance and PC2 accounted for 13%, giving a combined explanation of 83% of total variance. In the VST PCA, PC1 attributes for 69% and PC2 attributes for 14%, also adding up to 83%. The 2 methods rpoduce almost identical results in this dataset, which is expected given the moderate sample size (9 samples). 
+Both plots show very similar clustering patterns, with samples separating clearly by condition along PC1. This strong separation along the first principal component shows a substantial difference in gene expression between the control and mutant conditions, which is a good indicator that the experimental groups are distinct and that the data is of good quality for a downstream differential expression analysis. 
+The minor differences between rlog and VST, the 1% shift between PC1 and 2, are negligible. For this dataset, either transformation is appropriate thoigh rlog is generally preffered for smaller datasets such as this one as it provides better regularisation of low-count genes. 
